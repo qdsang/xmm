@@ -24,8 +24,7 @@ function ask(tx)
 }
 
 global.print = tx => {
-	console.info(tx.hash);
-	console.info(JSON.parse(tx.json));
+	console.log(+new Date, tx.hash, JSON.parse(tx.json));
 	console.info(`${tx.code}: ${tx.desc}`);
 };
 
@@ -45,7 +44,7 @@ global.abort = (msg, error) => {
 	if (error)
 		console.error(error);
 	else
-		console.error(msg);
+		console.error(msg, typeof msg, JSON.stringify(msg));
 
 	process.exit(1);
 };

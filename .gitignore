@@ -1,0 +1,10 @@
+
+*.log
+
+node_modules
+
+
+
+RippleClient.app
+Ripple-Wallet-osx64-1.4.1.app
+ripple-client-desktop-develop

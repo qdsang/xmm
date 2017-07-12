@@ -402,6 +402,8 @@ class XMM {
 		if (!ledger)
 			ledger = this.ledger;
 
+		// console.log('balance', me.wallet, ledger);
+
 		return this.api.getBalances(me.wallet, {
 			ledgerVersion: ledger
 		}).then(list => this.tovalues(list, me));
@@ -436,13 +438,16 @@ class XMM {
 
 	create(offer) {
 		offer = this.parse(offer, "offer");
-
-		return this.make("Order", offer, {
+		var param = {
 			direction: "buy",
 			quantity: offer.dst,
 			totalPrice: offer.src,
 			orderToReplace: offer.seq
-		});
+		};
+
+		// console.log('create offset', offer.wallet, param);
+		// return Promise.resolve({});
+		return this.make("Order", offer, param);
 	}
 
 	cancel(offer) {
@@ -523,6 +528,20 @@ class XMM {
 		return this.api.getOrders(me.wallet, {
 			ledgerVersion: ledger
 		}).then(list => this.tooffers(list, me));
+	}
+
+	orderBook(me, counter, option) {
+		me = this.parse(me, "wallet");
+
+		return this.api.getOrderbook(me.wallet, {
+			"base": {
+				"currency": "XRP",
+			},
+			"counter": counter || {
+				"currency": "CNY",
+				"counterparty": "rKiCet8SdvWxPXnAgYarFUXMh1zCPz432Y"
+			}
+		}, option);
 	}
 
 	cost(dst, me) {

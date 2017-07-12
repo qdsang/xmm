@@ -65,6 +65,8 @@ exports.aliases = [
 exports.builder = yargs => yargs;
 exports.handler = connect((config, xmm) => {
 	const id = xmm.parse(config.me);
+	// console.log('start', config);
+
 	const me = id.human;
 	const wallet = id.wallet;
 	const ledger = config.ledger;
@@ -72,7 +74,18 @@ exports.handler = connect((config, xmm) => {
 		return xmm.cancel(offer).then(print);
 	});
 	const create = (p, offer) => p.then(() => {
-		return xmm.create(offer).then(print);
+		return xmm.create(offer).then((data) => {
+			// console.log('create ok~!');
+			print(data);
+			return data;
+		}).catch((error) => {
+			console.log('create error', error.message, error.stack);
+		});
+		// .then((data) => {
+		// 	print(data);
+		// 	console.log(data);
+		// 	return data;
+		// });
 	});
 	const select = (offers, saldo) => {
 		const all = Object.keys(saldo);
@@ -194,15 +207,26 @@ exports.handler = connect((config, xmm) => {
 
 		if (zombie.length || bad.length)
 			return script;
+		// console.log(absent.length);
 
 		safe = absent.concat(far).slice(0, 1);
 		return safe.reduce(create, script);
 	};
 
-	Promise.all([
+	let tasks = [
 		xmm.balance(me, ledger),
 		xmm.offers(me, ledger)
-	]).then(state => {
+	];
+	let taskOrderBook = [];
+	for (let key in config.assets) {
+		let asset = config.assets[key];
+		taskOrderBook.push(xmm.orderBook(me, {
+			"currency": asset.code,
+			"counterparty": asset.issuer
+		}, { limit: 2 }));
+	}
+	tasks.push(Promise.all(taskOrderBook));
+	Promise.all(tasks).then(state => {
 		const saldo = {};
 		const zombie = [];
 		const bad = [];
@@ -225,8 +249,43 @@ exports.handler = connect((config, xmm) => {
 			}
 		});
 
-		offers = compute(saldo);
 
+		let ts = {}, p = {};
+		for (let i = 0; i < state[2].length; i++) {
+			let item = state[2][i], bidOne = item.bids[0];
+			if (bidOne) {
+				let spec = bidOne.specification;
+				ts[spec.totalPrice.currency] = spec.totalPrice.value / spec.quantity.value;
+			}
+		}
+
+		let k = 0;
+		for (let key in saldo) {
+			let code = key.substr(0, 3);
+			if (code == 'XRP') {
+				ts[code] = 1;
+			}
+			if (typeof ts[code] == 'undefined') {
+				console.log('k error', key, ts);
+			} else {
+				k += saldo[key] / ts[code];
+				p[code] = saldo[key] / ts[code] / saldo['XRP@fund'];
+			}
+		}
+
+		console.log('☆☆☆☆☆ start', me,
+			'balance Count:', state[0].length,
+			'offers Count:', state[1].length, JSON.stringify(saldo), JSON.stringify(ts), 'k:', k);
+		console.log(JSON.stringify(p));
+
+		if (k < 600) {
+			console.log('哎！');
+			process.exit();
+		}
+		// process.exit();
+
+		offers = compute(saldo);
+		// console.log(offers);
 		state[1].forEach(line => {
 			const src = xmm.parse({
 				type: "asset",
@@ -254,6 +313,7 @@ exports.handler = connect((config, xmm) => {
 		for (const pair in offers) {
 			const entry = offers[pair];
 			const status = decide(entry);
+			// console.log(status, pair, entry);
 
 			if ("zombie" == status)
 				zombie.push(entry.best);
@@ -277,6 +337,12 @@ exports.handler = connect((config, xmm) => {
 			dryrun(zombie, bad, absent, far);
 			process.exit();
 		}
+
+		if (bad.length) {
+			console.log('!!!!!!!!', bad.length);
+		}
+
+		// process.exit();
 
 		sequence(zombie, bad, absent, far).then(() => {
 			process.exit();
